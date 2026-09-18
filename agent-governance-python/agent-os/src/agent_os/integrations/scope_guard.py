@@ -87,7 +87,7 @@ def _escalate(current: str, proposed: str) -> str:
 def _get_diff_stats(
     repo_path: str, base_branch: str = "main"
 ) -> tuple[list[str], int, int, str | None]:
-    """Return diff stats and an optional measurement error.
+    """Return Git diff statistics and an optional measurement error.
 
     Args:
         repo_path: Path to a git repository or worktree.
@@ -126,14 +126,14 @@ def _get_diff_stats(
     for line_number, line in enumerate(result.stdout.strip().splitlines(), start=1):
         parts = line.split("\t")
         if len(parts) != 3:
-            error = f"unparseable git diff --numstat row at line {line_number}"
+            error = f"unparseable Git diff statistics row at line {line_number}"
             logger.warning("_get_diff_stats failed: %s", error)
             return [], 0, 0, error
         try:
             ins = int(parts[0]) if parts[0] != "-" else 0
             dels = int(parts[1]) if parts[1] != "-" else 0
         except ValueError:
-            error = f"unparseable git diff --numstat row at line {line_number}"
+            error = f"unparseable Git diff statistics row at line {line_number}"
             logger.warning("_get_diff_stats failed: %s", error)
             return [], 0, 0, error
         insertions += ins

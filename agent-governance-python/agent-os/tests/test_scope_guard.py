@@ -283,10 +283,10 @@ class TestGetDiffStats:
             args=[], returncode=0,
             stdout="10\t5\tsrc/main.py\n20\t3\tsrc/util.py\n",
         )
-        files, ins, dels, error = _get_diff_stats("/repo", "main")
+        files, ins, deletions, error = _get_diff_stats("/repo", "main")
         assert files == ["src/main.py", "src/util.py"]
         assert ins == 30
-        assert dels == 8
+        assert deletions == 8
         assert error is None
 
     @patch("agent_os.integrations.scope_guard.subprocess.run")
@@ -295,10 +295,10 @@ class TestGetDiffStats:
             args=[], returncode=0,
             stdout="-\t-\timage.png\n",
         )
-        files, ins, dels, error = _get_diff_stats("/repo")
+        files, ins, deletions, error = _get_diff_stats("/repo")
         assert files == ["image.png"]
         assert ins == 0
-        assert dels == 0
+        assert deletions == 0
         assert error is None
 
     @patch("agent_os.integrations.scope_guard.subprocess.run")
@@ -306,10 +306,10 @@ class TestGetDiffStats:
         mock_run.return_value = subprocess.CompletedProcess(
             args=[], returncode=0, stdout="",
         )
-        files, ins, dels, error = _get_diff_stats("/repo")
+        files, ins, deletions, error = _get_diff_stats("/repo")
         assert files == []
         assert ins == 0
-        assert dels == 0
+        assert deletions == 0
         assert error is None
 
     @patch(
@@ -317,10 +317,10 @@ class TestGetDiffStats:
         side_effect=FileNotFoundError("git not found"),
     )
     def test_handles_missing_git(self, mock_run):
-        files, ins, dels, error = _get_diff_stats("/repo")
+        files, ins, deletions, error = _get_diff_stats("/repo")
         assert files == []
         assert ins == 0
-        assert dels == 0
+        assert deletions == 0
         assert "git not found" in error
 
     @patch(
@@ -328,10 +328,10 @@ class TestGetDiffStats:
         side_effect=NotADirectoryError("not a repository"),
     )
     def test_handles_invalid_repo_path(self, mock_run):
-        files, ins, dels, error = _get_diff_stats("/not-a-repo")
+        files, ins, deletions, error = _get_diff_stats("/not-a-repo")
         assert files == []
         assert ins == 0
-        assert dels == 0
+        assert deletions == 0
         assert "not a repository" in error
 
     @patch(
@@ -339,10 +339,10 @@ class TestGetDiffStats:
         side_effect=subprocess.TimeoutExpired(["git", "diff"], 30),
     )
     def test_handles_diff_timeout(self, mock_run):
-        files, ins, dels, error = _get_diff_stats("/repo")
+        files, ins, deletions, error = _get_diff_stats("/repo")
         assert files == []
         assert ins == 0
-        assert dels == 0
+        assert deletions == 0
         assert "TimeoutExpired" in error
 
     @patch("agent_os.integrations.scope_guard.subprocess.run")
@@ -351,11 +351,11 @@ class TestGetDiffStats:
             args=[], returncode=128, stdout="", stderr="fatal: bad revision 'main'\n",
         )
 
-        files, ins, dels, error = _get_diff_stats("/repo", "main")
+        files, ins, deletions, error = _get_diff_stats("/repo", "main")
 
         assert files == []
         assert ins == 0
-        assert dels == 0
+        assert deletions == 0
         assert error == "git diff exited with status 128: fatal: bad revision 'main'"
 
     @pytest.mark.parametrize(
@@ -366,14 +366,14 @@ class TestGetDiffStats:
         ],
     )
     @patch("agent_os.integrations.scope_guard.subprocess.run")
-    def test_handles_unparseable_numstat_row(self, mock_run, stdout):
+    def test_handles_unparseable_diff_row(self, mock_run, stdout):
         mock_run.return_value = subprocess.CompletedProcess(
             args=[], returncode=0, stdout=stdout,
         )
 
-        files, ins, dels, error = _get_diff_stats("/repo")
+        files, ins, deletions, error = _get_diff_stats("/repo")
 
         assert files == []
         assert ins == 0
-        assert dels == 0
+        assert deletions == 0
         assert "unparseable" in error
