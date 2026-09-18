@@ -131,13 +131,13 @@ def _get_diff_stats(
             return [], 0, 0, error
         try:
             ins = int(parts[0]) if parts[0] != "-" else 0
-            dels = int(parts[1]) if parts[1] != "-" else 0
+            deletions_count = int(parts[1]) if parts[1] != "-" else 0
         except ValueError:
             error = f"unparseable Git diff statistics row at line {line_number}"
             logger.warning("_get_diff_stats failed: %s", error)
             return [], 0, 0, error
         insertions += ins
-        deletions += dels
+        deletions += deletions_count
         files.append(parts[2])
     return files, insertions, deletions, None
 
