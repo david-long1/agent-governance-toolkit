@@ -254,3 +254,22 @@ class NativeRuntimeClient:
         except Exception:  # noqa: BLE001 - label lookup must never break construction
             return {}
         return labels if isinstance(labels, dict) else {}
+
+    def approval_config(self) -> dict[str, object]:
+        """The merged manifest's top-level ``approval`` section.
+
+        Sourced from the native runtime so it is populated on every
+        constructor, including ``from_path`` with ``extends`` parents,
+        ``from_url`` and ``from_manifest_chain``. Returns an empty mapping when
+        the manifest declares no ``approval`` section, when the native
+        extension is unavailable, or on a native build without the accessor.
+        """
+
+        native = self._native
+        if native is None or not hasattr(native, "approval_config"):
+            return {}
+        try:
+            approval = native.approval_config()
+        except Exception:  # noqa: BLE001 - best effort, like policy_labels
+            return {}
+        return approval if isinstance(approval, dict) else {}
