@@ -272,6 +272,28 @@ class TestEvaluateFromGit:
         assert event["decision"] == "HARD_FAIL"
         assert event["error"] == "git diff exited with status 128"
 
+    @pytest.mark.parametrize("base_branch", ["--stat", "b.py"])
+    @patch("agent_os.integrations.scope_guard.subprocess.run")
+    def test_option_like_or_path_like_base_branch_hard_fails(
+        self, mock_run, base_branch
+    ):
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=[], returncode=128, stdout="", stderr="fatal: bad revision\n",
+        )
+        guard = ScopeGuard()
+        cfg = ScopeConfig(max_files=10, max_lines=500)
+
+        result = guard.evaluate_from_git("agent-1", cfg, "/repo", base_branch)
+
+        assert result.decision == "HARD_FAIL"
+        assert mock_run.call_args.args[0] == [
+            "git",
+            "diff",
+            "--numstat",
+            "--end-of-options",
+            base_branch,
+            "--",
+        ]
 
 # ── _get_diff_stats ───────────────────────────────────────────
 
@@ -357,6 +379,22 @@ class TestGetDiffStats:
         assert ins == 0
         assert deletions == 0
         assert error == "git diff exited with status 128: fatal: bad revision 'main'"
+
+    @patch("agent_os.integrations.scope_guard.subprocess.run")
+    def test_truncates_git_error_output(self, mock_run):
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=[],
+            returncode=129,
+            stdout="",
+            stderr="fatal: not a repository\n" + ("usage: git diff\n" * 1000),
+        )
+
+        files, ins, deletions, error = _get_diff_stats("/repo")
+
+        assert files == []
+        assert ins == 0
+        assert deletions == 0
+        assert error == "git diff exited with status 129: fatal: not a repository"
 
     @pytest.mark.parametrize(
         "stdout",

@@ -39,7 +39,9 @@ class ScopeConfig:
     Attributes:
         max_files: Maximum number of files an agent may change.
         max_lines: Maximum total lines (insertions + deletions) allowed.
-        mode: Guard mode — ``"on"`` (default) to enforce, ``"off"`` to skip.
+        mode: Guard mode — ``"on"`` (default) to enforce. A git measurement
+            failure returns ``HARD_FAIL``; ``"off"`` is the explicit escape
+            hatch that skips measurement and scope checks.
         drift_detection: Whether to evaluate drift indicators.
     """
 
@@ -99,7 +101,14 @@ def _get_diff_stats(
     """
     try:
         result = subprocess.run(  # noqa: S603 — trusted subprocess in scope guard
-            ["git", "diff", "--numstat", base_branch],  # noqa: S607 — known CLI tool path
+            [
+                "git",
+                "diff",
+                "--numstat",
+                "--end-of-options",
+                base_branch,
+                "--",
+            ],  # noqa: S607 — known CLI tool path
             cwd=repo_path,
             capture_output=True,
             text=True,
@@ -111,10 +120,8 @@ def _get_diff_stats(
         return [], 0, 0, error
 
     if result.returncode != 0:
-        stderr = result.stderr
-        if isinstance(stderr, bytes):
-            stderr = stderr.decode(errors="replace")
-        stderr = (stderr or "").strip()
+        stderr = (result.stderr or "").strip()
+        stderr = stderr.splitlines()[0][:200] if stderr else ""
         detail = f": {stderr}" if stderr else ""
         error = f"git diff exited with status {result.returncode}{detail}"
         logger.warning("_get_diff_stats failed: %s", error)
@@ -278,7 +285,7 @@ class ScopeGuard:
         base_branch: str = "main",
         drift_indicators: list[dict[str, Any]] | None = None,
     ) -> ScopeEvaluation:
-        """Convenience wrapper that reads diff stats from *repo_path*.
+        """Read diff stats from *repo_path* and evaluate the configured scope.
 
         Args:
             agent_id: Unique agent identifier.
@@ -288,7 +295,10 @@ class ScopeGuard:
             drift_indicators: Optional drift indicator dicts.
 
         Returns:
-            A :class:`ScopeEvaluation`.
+            A :class:`ScopeEvaluation`. If the git diff cannot be measured,
+            the result is ``HARD_FAIL`` with ``error`` set. Set
+            ``config.mode="off"`` to explicitly skip measurement and scope
+            checks, including first-run or no-baseline flows.
         """
         changed_files, insertions, deletions, error = _get_diff_stats(
             repo_path, base_branch
