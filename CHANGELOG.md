@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **`ApprovalResolution.reason`** — a resolver that refuses can say why: `ApprovalResolution.deny(reason)` carries the explanation onto the denial verdict's `message` (through `AgentControl.enforce` and `HostSession`), while the verdict's `reason` keeps the policy's classified code.
+- **Python SDK ships the `spec/schema` documents** — `agent_control_specification.schemas` exposes `names()`, `text()` and `load()` over the manifest, approval, `cedar_advice` and `wire/*` JSON schemas, so hosts validate against the shipped contract instead of a hand copy. The files are copies of `policy-engine/spec/schema`, guarded by a drift test.
 - **ACS artifact validation API** - added one bounded Rust-core validator for canonical manifest schema checks, typed ACS semantics, and OPA Rego parsing, exposed with the same structured result through Rust, Python, Node, and .NET. The `acs-generator` CLI now consumes this shared SDK surface.
 - **Go SDK context accumulation governance** - added workflow-scoped context envelopes, a data-classification sensitivity ladder, aggregation-rule evaluation with unknown-combination escalation, constrain-as-obligations policy mapping, grow-only restriction inheritance, and classified context-transition audit events for parity with the Python implementation (#3084).
 
