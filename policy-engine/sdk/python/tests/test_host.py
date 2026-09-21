@@ -10,6 +10,7 @@ import pytest
 
 from agent_control_specification import (
     DEFAULT_APPROVAL_TIMEOUT_SECONDS,
+    AgentControl,
     AgentControlBlocked,
     AgentControlSuspended,
     Decision,
@@ -18,6 +19,7 @@ from agent_control_specification import (
     InterventionPointResult,
     SnapshotBuilder,
     Verdict,
+    guard_tool,
     run_sync,
 )
 
@@ -447,3 +449,80 @@ def test_a_hung_resolver_denies_rather_than_blocking() -> None:
     assert elapsed < 5
     assert result.verdict.decision is Decision.DENY
     assert result.verdict.reason == "host_error:approval_unresolved"
+
+
+class _BudgetControl:
+    """Denies pre_tool_call once the envelope's tool_call_count reaches the cap."""
+
+    def __init__(self, cap: int) -> None:
+        self.cap = cap
+        self.snapshots: list[tuple[str, dict]] = []
+
+    async def evaluate_intervention_point(self, request):
+        point = request.intervention_point.value
+        self.snapshots.append((point, dict(request.snapshot)))
+        count = request.snapshot["envelope"]["budgets"]["tool_call_count"]
+        if point == "pre_tool_call" and count >= self.cap:
+            return InterventionPointResult(Verdict(Decision.DENY, reason="budget:max_tool_calls"))
+        return InterventionPointResult(Verdict(Decision.ALLOW))
+
+
+def _counts(control: _BudgetControl, point: str) -> list[int]:
+    return [s["envelope"]["budgets"]["tool_call_count"] for p, s in control.snapshots if p == point]
+
+
+def test_guard_tool_advances_the_tool_call_count_from_a_builder() -> None:
+    runtime = _BudgetControl(cap=2)
+    builder = SnapshotBuilder(agent_id="bot", session_id="s1")
+    guarded = guard_tool(AgentControl(runtime), "lookup", lambda args: {"ok": args}, snapshot=builder)
+
+    assert run_sync(guarded({"n": 1})) == {"ok": {"n": 1}}
+    assert run_sync(guarded({"n": 2})) == {"ok": {"n": 2}}
+    with pytest.raises(AgentControlBlocked) as blocked:
+        run_sync(guarded({"n": 3}))
+
+    assert blocked.value.result.verdict.reason == "budget:max_tool_calls"
+    # The policy deciding call N reads the count as of N-1; the post check of
+    # call N sees N; the denied third call left the counter alone.
+    assert _counts(runtime, "pre_tool_call") == [0, 1, 2]
+    assert _counts(runtime, "post_tool_call") == [1, 2]
+    assert builder.tool_call_count == 2
+
+
+def test_guard_tool_with_a_frozen_mapping_never_advances() -> None:
+    """A plain mapping keeps today's behaviour: the host owns the counter."""
+    runtime = _BudgetControl(cap=2)
+    snapshot = SnapshotBuilder(agent_id="bot", session_id="s1").snapshot("pre_tool_call")
+    guarded = guard_tool(AgentControl(runtime), "lookup", lambda args: args, snapshot=snapshot)
+
+    for n in range(3):
+        run_sync(guarded({"n": n}))
+
+    assert _counts(runtime, "pre_tool_call") == [0, 0, 0]
+
+
+def test_per_call_ambient_data_layers_over_a_builder_but_not_its_envelope() -> None:
+    runtime = _BudgetControl(cap=10)
+    builder = SnapshotBuilder(agent_id="bot", session_id="s1")
+    guarded = guard_tool(AgentControl(runtime), "lookup", lambda args: args, snapshot=builder)
+
+    run_sync(guarded({}, agent_control_snapshot={"turn": "t1", "envelope": "spoofed"}))
+
+    _point, snapshot = runtime.snapshots[0]
+    assert snapshot["turn"] == "t1"
+    assert snapshot["envelope"]["agent"]["id"] == "bot"
+    assert snapshot["envelope"]["budgets"]["tool_call_count"] == 0
+
+
+def test_run_tool_and_protect_tool_accept_a_builder() -> None:
+    runtime = _BudgetControl(cap=10)
+    control = AgentControl(runtime)
+    builder = SnapshotBuilder(agent_id="bot", session_id="s1")
+
+    run_sync(control.run_tool("t", {"a": 1}, lambda args: args, snapshot=builder))
+    protected = control.protect_tool("t", lambda args: args, snapshot=builder)
+    run_sync(protected({"a": 2}, snapshot={"turn": "t2"}))
+
+    assert builder.tool_call_count == 2
+    assert _counts(runtime, "pre_tool_call") == [0, 1]
+    assert runtime.snapshots[-1][1]["turn"] == "t2"

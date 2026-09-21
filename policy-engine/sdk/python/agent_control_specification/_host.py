@@ -25,9 +25,10 @@ from __future__ import annotations
 import asyncio
 import math
 import threading
+from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
-from typing import Any, Awaitable, Mapping
+from typing import Any, Awaitable, Protocol, runtime_checkable
 
 from ._types import (
     AgentControlBlocked,
@@ -230,6 +231,44 @@ class SnapshotBuilder:
         # replace it and forge an identity or reset a budget.
         snapshot["envelope"] = self.envelope(intervention_point)
         return snapshot
+
+@runtime_checkable
+class SnapshotSource(Protocol):
+    """Builds the snapshot for each evaluation and owns the budget counters.
+
+    :class:`SnapshotBuilder` is the host-side implementation. The tool
+    adapters and :meth:`AgentControl.run_tool` accept one in place of a frozen
+    mapping so that ``tool_call_count`` advances between calls.
+    """
+
+    def snapshot(self, intervention_point: str, **body: JsonValue) -> dict[str, Any]: ...
+
+    def record_tool_call(self, count: int = 1) -> None: ...
+
+
+class _AmbientSnapshotSource:
+    """A view over a source that folds fixed ambient data into every snapshot."""
+
+    def __init__(self, source: SnapshotSource, ambient: Mapping[str, JsonValue]) -> None:
+        self._source = source
+        self._ambient = dict(ambient)
+
+    def snapshot(self, intervention_point: str, **body: JsonValue) -> dict[str, Any]:
+        return self._source.snapshot(intervention_point, **{**self._ambient, **body})
+
+    def record_tool_call(self, count: int = 1) -> None:
+        self._source.record_tool_call(count)
+
+
+def merge_snapshot(
+    default: Mapping[str, JsonValue] | SnapshotSource | None,
+    per_call: Mapping[str, JsonValue] | None,
+) -> dict[str, JsonValue] | SnapshotSource:
+    """Layer per-call ambient data over a default mapping or snapshot source."""
+    if isinstance(default, SnapshotSource):
+        return default if not per_call else _AmbientSnapshotSource(default, per_call)
+    return {**dict(default or {}), **dict(per_call or {})}
+
 
 def _with_decision(
     result: InterventionPointResult, decision: Decision, reason: str | None
