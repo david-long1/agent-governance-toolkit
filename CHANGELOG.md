@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **`AgentControlRuntimeError`** — engine runtime errors raised from the Python SDK now carry `reason` (the reserved `runtime_error:*` code) and `detail` as attributes. It subclasses `RuntimeError` and keeps the same message, so existing `except RuntimeError` handlers and message matching are unaffected.
 - **ACS artifact validation API** - added one bounded Rust-core validator for canonical manifest schema checks, typed ACS semantics, and OPA Rego parsing, exposed with the same structured result through Rust, Python, Node, and .NET. The `acs-generator` CLI now consumes this shared SDK surface.
 - **Go SDK context accumulation governance** - added workflow-scoped context envelopes, a data-classification sensitivity ladder, aggregation-rule evaluation with unknown-combination escalation, constrain-as-obligations policy mapping, grow-only restriction inheritance, and classified context-transition audit events for parity with the Python implementation (#3084).
 
