@@ -6,7 +6,7 @@ import hashlib
 import json
 import warnings
 from enum import Enum, IntEnum
-from typing import Any, Mapping, MutableMapping, Sequence, TypeAlias, Union
+from typing import Mapping, MutableMapping, Sequence, TypeAlias, Union
 
 # Read-only containers so narrower caller payloads (dict[str, str], tuples) still type-check.
 JsonValue: TypeAlias = bool | int | float | str | None | Sequence["JsonValue"] | Mapping[str, "JsonValue"]
