@@ -312,23 +312,31 @@ class AgentControl:
         normalized_tool_call_id = _normalize_tool_call_id(tool_call_id)
         tool_call = _tool_call(tool_name, args, normalized_tool_call_id)
 
-        def build(intervention_point: InterventionPoint, **body: JsonValue) -> dict[str, JsonValue]:
+        def build(
+            intervention_point: InterventionPoint, body: Mapping[str, JsonValue]
+        ) -> dict[str, JsonValue]:
             if source is not None:
-                return source.snapshot(intervention_point.value, **body)
+                return source.build_snapshot(intervention_point.value, body)
             return {**ambient, **body}
 
-        pre_result = await self.evaluate_intervention_point(
-            InterventionPoint.PRE_TOOL_CALL,
-            build(InterventionPoint.PRE_TOOL_CALL, tool_call=tool_call),
-            enforcement_mode,
-        )
-        await self.enforce(
-            InterventionPoint.PRE_TOOL_CALL, pre_result, enforcement_mode, approval_resolver=approval_resolver
-        )
-        # The call goes ahead, so count it now: the policy deciding call N saw
-        # N-1, and a call it denied never inflates the budget it breached.
+        pre_snapshot = build(InterventionPoint.PRE_TOOL_CALL, {"tool_call": tool_call})
         if source is not None:
+            # Reserve the slot before the first await, so concurrent calls on
+            # one builder each see the earlier reservations instead of one
+            # stale count. The policy deciding call N still reads N-1.
             source.record_tool_call()
+        try:
+            pre_result = await self.evaluate_intervention_point(
+                InterventionPoint.PRE_TOOL_CALL, pre_snapshot, enforcement_mode
+            )
+            await self.enforce(
+                InterventionPoint.PRE_TOOL_CALL, pre_result, enforcement_mode, approval_resolver=approval_resolver
+            )
+        except BaseException:
+            # The call does not go ahead, so it does not count.
+            if source is not None:
+                source.release_tool_call()
+            raise
         effective_args = _transformed_or(pre_result, args, enforcement_mode)
 
         tool_result = await _maybe_await(execute(effective_args))
@@ -336,8 +344,10 @@ class AgentControl:
             InterventionPoint.POST_TOOL_CALL,
             build(
                 InterventionPoint.POST_TOOL_CALL,
-                tool_call=_tool_call(tool_name, effective_args, normalized_tool_call_id),
-                tool_result=tool_result,
+                {
+                    "tool_call": _tool_call(tool_name, effective_args, normalized_tool_call_id),
+                    "tool_result": tool_result,
+                },
             ),
             enforcement_mode,
         )

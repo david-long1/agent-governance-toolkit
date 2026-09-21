@@ -5,6 +5,7 @@ import json
 from collections.abc import Callable, Mapping
 from typing import Any, TypeVar
 
+from .._host import SnapshotSource, merge_snapshot
 from .._orchestration import AgentControl
 from .._types import (
     AgentControlBlocked,
@@ -14,12 +15,11 @@ from .._types import (
     JsonValue,
 )
 from ._errors import AdapterUnsupportedError
-from .._host import SnapshotSource, merge_snapshot
 from ._shared import (
     SNAPSHOT_KWARG,
+    _default_snapshot,
     _jsonable,
     _maybe_await,
-    _default_snapshot,
     _merge_snapshot,
     _ObjectProxy,
     _resolve_control_and_target,

@@ -179,6 +179,14 @@ class SnapshotBuilder:
         _check_counter("elapsed_seconds", seconds)
         self.elapsed_seconds += float(seconds)
 
+    def release_tool_call(self, count: int = 1) -> None:
+        """Give back ``count`` reservations for tool calls that did not go ahead."""
+        if isinstance(count, bool) or not isinstance(count, int) or count < 0:
+            raise ValueError(f"count must be a non-negative integer, got {count!r}")
+        if count > self.tool_call_count:
+            raise ValueError(f"cannot release {count} tool calls; only {self.tool_call_count} recorded")
+        self.tool_call_count -= count
+
     def reset_counters(self) -> None:
         """Zero the four counters."""
         self.tool_call_count = 0
@@ -225,6 +233,12 @@ class SnapshotBuilder:
         self, intervention_point: str, **body: JsonValue
     ) -> dict[str, Any]:
         """Return a full snapshot: the envelope plus whatever the hook carries."""
+        return self.build_snapshot(intervention_point, body)
+
+    def build_snapshot(
+        self, intervention_point: str, body: Mapping[str, JsonValue]
+    ) -> dict[str, Any]:
+        """Like :meth:`snapshot`, with the hook body as a mapping so any key is allowed."""
         snapshot: dict[str, Any] = dict(body)
         # The envelope carries host-asserted identity, session and budget
         # counters that policies trust. Write it last so no hook body can
@@ -238,12 +252,19 @@ class SnapshotSource(Protocol):
 
     :class:`SnapshotBuilder` is the host-side implementation. The tool
     adapters and :meth:`AgentControl.run_tool` accept one in place of a frozen
-    mapping so that ``tool_call_count`` advances between calls.
+    mapping so that ``tool_call_count`` advances between calls: they reserve a
+    slot with ``record_tool_call`` before a call is evaluated and give it back
+    with ``release_tool_call`` when the call does not go ahead. Hosts call
+    neither for calls the SDK governs.
     """
 
-    def snapshot(self, intervention_point: str, **body: JsonValue) -> dict[str, Any]: ...
+    def build_snapshot(
+        self, intervention_point: str, body: Mapping[str, JsonValue]
+    ) -> dict[str, Any]: ...
 
     def record_tool_call(self, count: int = 1) -> None: ...
+
+    def release_tool_call(self, count: int = 1) -> None: ...
 
 
 class _AmbientSnapshotSource:
@@ -253,11 +274,16 @@ class _AmbientSnapshotSource:
         self._source = source
         self._ambient = dict(ambient)
 
-    def snapshot(self, intervention_point: str, **body: JsonValue) -> dict[str, Any]:
-        return self._source.snapshot(intervention_point, **{**self._ambient, **body})
+    def build_snapshot(
+        self, intervention_point: str, body: Mapping[str, JsonValue]
+    ) -> dict[str, Any]:
+        return self._source.build_snapshot(intervention_point, {**self._ambient, **body})
 
     def record_tool_call(self, count: int = 1) -> None:
         self._source.record_tool_call(count)
+
+    def release_tool_call(self, count: int = 1) -> None:
+        self._source.release_tool_call(count)
 
 
 def merge_snapshot(
@@ -293,6 +319,9 @@ class HostSession:
 
     Counters advance only when the host says so, through ``record_*`` on
     :attr:`builder`, because only the host knows whether a call completed.
+    The exception is a tool call governed through the SDK: when
+    :attr:`builder` is handed to a tool adapter or to ``run_tool``, the SDK
+    counts that call itself, so do not also call ``record_tool_call`` for it.
     """
 
     def __init__(

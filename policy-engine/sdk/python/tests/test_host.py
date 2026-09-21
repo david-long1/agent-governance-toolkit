@@ -459,6 +459,9 @@ class _BudgetControl:
         self.snapshots: list[tuple[str, dict]] = []
 
     async def evaluate_intervention_point(self, request):
+        # Yield like the native runtime does (run_in_executor), so concurrent
+        # calls interleave here rather than running to completion in turn.
+        await asyncio.sleep(0)
         point = request.intervention_point.value
         self.snapshots.append((point, dict(request.snapshot)))
         count = request.snapshot["envelope"]["budgets"]["tool_call_count"]
@@ -506,12 +509,53 @@ def test_per_call_ambient_data_layers_over_a_builder_but_not_its_envelope() -> N
     builder = SnapshotBuilder(agent_id="bot", session_id="s1")
     guarded = guard_tool(AgentControl(runtime), "lookup", lambda args: args, snapshot=builder)
 
-    run_sync(guarded({}, agent_control_snapshot={"turn": "t1", "envelope": "spoofed"}))
+    run_sync(
+        guarded(
+            {},
+            agent_control_snapshot={"turn": "t1", "envelope": "spoofed", "intervention_point": "also fine"},
+        )
+    )
 
     _point, snapshot = runtime.snapshots[0]
     assert snapshot["turn"] == "t1"
+    assert snapshot["intervention_point"] == "also fine"
     assert snapshot["envelope"]["agent"]["id"] == "bot"
     assert snapshot["envelope"]["budgets"]["tool_call_count"] == 0
+
+
+def test_concurrent_tool_calls_share_one_budget() -> None:
+    """Five parallel calls at cap 2: two go ahead and the counter ends at 2.
+
+    The slot is reserved before the first await, so each call's pre-check
+    reads the earlier reservations instead of one stale count; the three
+    denied calls give their reservations back.
+    """
+    runtime = _BudgetControl(cap=2)
+    builder = SnapshotBuilder(agent_id="bot", session_id="s1")
+    guarded = guard_tool(AgentControl(runtime), "lookup", lambda args: args, snapshot=builder)
+
+    async def fan_out():
+        return await asyncio.gather(*(guarded({"n": n}) for n in range(5)), return_exceptions=True)
+
+    outcomes = asyncio.run(fan_out())
+
+    assert sum(not isinstance(o, BaseException) for o in outcomes) == 2
+    assert sum(isinstance(o, AgentControlBlocked) for o in outcomes) == 3
+    assert builder.tool_call_count == 2
+    assert sorted(_counts(runtime, "pre_tool_call")) == [0, 1, 2, 3, 4]
+
+
+def test_a_denied_pre_check_gives_the_reservation_back() -> None:
+    runtime = _BudgetControl(cap=0)
+    builder = SnapshotBuilder(agent_id="bot", session_id="s1")
+    guarded = guard_tool(AgentControl(runtime), "lookup", lambda args: args, snapshot=builder)
+
+    with pytest.raises(AgentControlBlocked):
+        run_sync(guarded({}))
+
+    assert builder.tool_call_count == 0
+    with pytest.raises(ValueError):
+        builder.release_tool_call()
 
 
 def test_run_tool_and_protect_tool_accept_a_builder() -> None:
