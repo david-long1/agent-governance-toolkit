@@ -92,14 +92,14 @@ explicit ``approval_timeout_seconds`` argument wins over both.
 def _manifest_approval_timeout(control: Any) -> float | None:
     """Return the control manifest's ``approval.timeout_seconds``, if declared.
 
-    The native runtime validates the field as a non-negative integer, so
+    The native runtime validates the field as a positive integer, so
     anything else can only come from a custom control and is ignored.
     """
     approval = getattr(control, "approval_config", None)
     if not isinstance(approval, Mapping):
         return None
     timeout = approval.get("timeout_seconds")
-    if isinstance(timeout, bool) or not isinstance(timeout, int) or timeout < 0:
+    if isinstance(timeout, bool) or not isinstance(timeout, int) or timeout <= 0:
         return None
     return float(timeout)
 
@@ -271,10 +271,12 @@ class HostSession:
         self._mode = EnforcementMode(mode)
         if approval_timeout_seconds is None:
             approval_timeout_seconds = _manifest_approval_timeout(control)
-        self._approval_timeout_seconds = (
-            DEFAULT_APPROVAL_TIMEOUT_SECONDS
-            if approval_timeout_seconds is None
-            else approval_timeout_seconds
+        if approval_timeout_seconds is None:
+            approval_timeout_seconds = DEFAULT_APPROVAL_TIMEOUT_SECONDS
+        # The core accepts any u64, but a float past this bound makes
+        # ``Thread.join`` raise OverflowError instead of waiting.
+        self._approval_timeout_seconds = min(
+            float(approval_timeout_seconds), threading.TIMEOUT_MAX
         )
         self._approval_on_timeout = approval_on_timeout
         self.builder = builder or SnapshotBuilder(

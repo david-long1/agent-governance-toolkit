@@ -385,6 +385,7 @@ def test_explicit_timeout_overrides_the_manifest() -> None:
         {"default_resolver": "webhook"},
         {"timeout_seconds": "soon"},
         {"timeout_seconds": True},
+        {"timeout_seconds": 0},
         {"timeout_seconds": -1},
         "not-a-mapping",
     ],
@@ -394,6 +395,20 @@ def test_manifest_without_a_usable_timeout_keeps_the_default(approval) -> None:
     session = HostSession(_ManifestControl(approval))
 
     assert session._approval_timeout_seconds == DEFAULT_APPROVAL_TIMEOUT_SECONDS
+
+
+@pytest.mark.parametrize("path", ["manifest", "argument"])
+def test_oversized_timeout_is_clamped_to_what_join_accepts(path) -> None:
+    """A u64 the core accepts must not turn every escalation into OverflowError."""
+    import threading
+
+    huge = 2**64 - 1
+    if path == "manifest":
+        session = HostSession(_ManifestControl({"timeout_seconds": huge}))
+    else:
+        session = HostSession(_ManifestControl({}), approval_timeout_seconds=huge)
+
+    assert session._approval_timeout_seconds == threading.TIMEOUT_MAX
 
 
 def test_manifest_timeout_bounds_a_hung_resolver() -> None:
