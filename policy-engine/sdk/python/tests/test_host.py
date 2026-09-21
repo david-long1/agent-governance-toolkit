@@ -291,6 +291,18 @@ def test_escalation_blocked_becomes_deny() -> None:
     assert result.verdict.reason == _ESCALATED.verdict.reason
 
 
+def test_escalation_blocked_keeps_the_blocking_message() -> None:
+    """A resolver's refusal reason reaches the session caller on the verdict message."""
+    blocked = InterventionPointResult(
+        Verdict(Decision.DENY, reason="needs-approval", message="ticket CR-42 was rejected", approval={})
+    )
+    result = _escalating_session(AgentControlBlocked(InterventionPoint.INPUT, blocked)).input("x")
+
+    assert result.verdict.decision is Decision.DENY
+    assert result.verdict.reason == "needs-approval"
+    assert result.verdict.message == "ticket CR-42 was rejected"
+
+
 def test_escalation_suspended_stays_liftable_for_later_resume() -> None:
     """A suspended approval retains its liftable deny for later resume."""
     result = _escalating_session(AgentControlSuspended(InterventionPoint.INPUT, _ESCALATED)).input("x")
