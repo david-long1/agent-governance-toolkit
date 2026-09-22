@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import pickle
 import unittest
 from pathlib import Path
 
@@ -530,6 +531,18 @@ class ZeroConfigDefaultsTests(unittest.TestCase):
         # The message is unchanged, so string-matching callers keep working.
         self.assertIn("runtime_error:manifest_invalid", str(error))
         self.assertIn(error.detail, str(error))
+
+    def test_runtime_errors_survive_pickling(self):
+        # Hosts that build controls in process-pool workers get the error back
+        # through pickle; the attributes must survive the round trip.
+        with self.assertRaises(AgentControlRuntimeError) as ctx:
+            AgentControl.from_url("http://policy.example/manifest.yaml")
+        error = ctx.exception
+        restored = pickle.loads(pickle.dumps(error))
+        self.assertIsInstance(restored, AgentControlRuntimeError)
+        self.assertEqual(restored.reason, error.reason)
+        self.assertEqual(restored.detail, error.detail)
+        self.assertEqual(str(restored), str(error))
 
     def test_from_url_pin_is_optional(self):
         # The pin is optional, mirroring URL extends. Omitting it still reaches

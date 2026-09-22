@@ -280,6 +280,11 @@ class AgentControlRuntimeError(RuntimeError):
         self.reason = reason
         self.detail = detail
 
+    # ``args`` holds only the message, so the default reduce cannot rebuild the
+    # three-argument constructor when a process pool unpickles the error.
+    def __reduce__(self):
+        return (type(self), (str(self), self.reason, self.detail))
+
 
 class AgentControlInterruption(RuntimeError):
     """Base for control-flow interruptions raised by enforcing wrappers.
@@ -304,6 +309,10 @@ class AgentControlBlocked(AgentControlInterruption):
         reason = f" ({result.verdict.reason})" if result.verdict.reason else ""
         super().__init__(f"Agent Control Specification blocked {intervention_point.value}{reason}.")
 
+    # Rebuild from the constructor arguments so the error survives pickling.
+    def __reduce__(self):
+        return (type(self), (self.intervention_point, self.result))
+
 
 class AgentControlSuspended(AgentControlInterruption):
     """Raised when an approval resolver suspends an escalate verdict for deferred approval.
@@ -327,6 +336,9 @@ class AgentControlSuspended(AgentControlInterruption):
         super().__init__(
             f"Agent Control Specification suspended {intervention_point.value} pending approval{reason}."
         )
+
+    def __reduce__(self):
+        return (type(self), (self.intervention_point, self.result, self.handle))
 
 
 class ApprovalOutcome(str, Enum):
