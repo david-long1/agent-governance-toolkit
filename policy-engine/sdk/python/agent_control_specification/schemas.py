@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """The ``spec/schema`` JSON documents, shipped with the package.
 
 The files under ``schema/`` are copies of ``policy-engine/spec/schema``; the
@@ -9,12 +11,13 @@ from __future__ import annotations
 
 import json
 from importlib import resources
+from importlib.resources.abc import Traversable
 from typing import Any
 
 _SUFFIX = ".schema.json"
 
 
-def _root() -> Any:
+def _root() -> Traversable:
     return resources.files(__package__) / "schema"
 
 
