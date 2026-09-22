@@ -43,6 +43,7 @@ from ._host import (
     DEFAULT_APPROVAL_TIMEOUT_SECONDS,
     HostSession,
     SnapshotBuilder,
+    SnapshotSource,
     run_sync,
 )
 from ._telemetry import (
@@ -90,6 +91,7 @@ __all__ = [
     "DEFAULT_APPROVAL_TIMEOUT_SECONDS",
     "HostSession",
     "SnapshotBuilder",
+    "SnapshotSource",
     "run_sync",
     "AdapterUnsupportedError",
     "AgentControlLiteLLMGuardrail",
