@@ -282,7 +282,7 @@ class AgentControlRuntimeError(RuntimeError):
         self.detail = detail
 
     # ``args`` holds only the message, so the default reduce cannot rebuild the
-    # three-argument constructor when a process pool unpickles the error.
+    # three-argument constructor when a process pool loads the pickled error.
     def __reduce__(self):
         return (type(self), (str(self), self.reason, self.detail))
 
