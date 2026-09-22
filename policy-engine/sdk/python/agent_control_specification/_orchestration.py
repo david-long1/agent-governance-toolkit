@@ -388,7 +388,7 @@ class AgentControl:
         if resolution.outcome == ApprovalOutcome.SUSPEND:
             _require_approved_identity(intervention_point, result, original_identity, resolution.action_identity)
             raise AgentControlSuspended(intervention_point, result, resolution.handle)
-        if resolution.reason:
+        if isinstance(resolution.reason, str) and resolution.reason:
             result = replace(result, verdict=replace(result.verdict, message=resolution.reason))
         raise AgentControlBlocked(intervention_point, result)
 

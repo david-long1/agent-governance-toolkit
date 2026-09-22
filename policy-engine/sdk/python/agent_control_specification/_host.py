@@ -339,8 +339,11 @@ class HostSession:
             # synthesized. Overwriting it with a name of our own destroyed
             # that and invented a reason outside the closed set.
             blocked_verdict = blocked.result.verdict
+            message = blocked_verdict.message
+            if message is None:
+                message = result.verdict.message
             return _with_decision(
-                replace(result, verdict=replace(result.verdict, message=blocked_verdict.message)),
+                replace(result, verdict=replace(result.verdict, message=message)),
                 Decision.DENY,
                 blocked_verdict.reason,
             )
