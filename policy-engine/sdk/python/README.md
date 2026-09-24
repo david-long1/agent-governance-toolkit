@@ -89,7 +89,13 @@ Python framework helpers are duck typed and guard the selected async or sync met
 
 Semantic Kernel helpers are exported as `guard_semantic_kernel_function()` for a single function-like object and `guard_semantic_kernel_filter()` for filter-style invocation contexts. Function wrappers mediate `pre_tool_call` and `post_tool_call`, passing transformed arguments to the function and transformed results back to the host.
 
+Tool wrappers also accept a `SnapshotBuilder` as `snapshot=` in place of a mapping: `guard_tool()`, `guard_mcp_tool()`, `guard_langchain_tool()`, the Semantic Kernel helpers, `guard_foundry_agent()`, and `AgentControl.run_tool()` / `protect_tool()` then build each snapshot from the builder's current envelope and advance `tool_call_count` once the pre-check permits a call, so a `budgets` cap on `tool_call_count` is enforced. A plain mapping is sent unchanged on every call, and the host advances the counters itself. The slot is reserved before the pre-check runs and released if the call is denied, so concurrent calls on one builder share the budget correctly. Do not also call `record_tool_call` for calls the SDK governs this way. The LiteLLM proxy guardrail still evaluates from the mapping it was constructed with and does not take a builder.
+
 Single-tool wrappers accept an optional snapshot-compatible tool call id: pass `tool_call_id=` to `AgentControl.run_tool()` / `protect_tool()`, or `agent_control_tool_call_id=` to adapter helpers such as `guard_tool()` / `guard_mcp_tool()`. When no id is supplied the snapshot omits `tool_call.id`.
+
+## Shipped schemas
+
+The `spec/schema` documents ship inside the package under `agent_control_specification.schemas`: `schemas.names()` lists them (`manifest`, `approval`, `cedar_advice` and the `wire/*` payload schemas), `schemas.text(name)` returns the JSON text and `schemas.load(name)` the parsed document. Validate advice and manifest payloads against these rather than a hand-copied contract; the files are copies of `policy-engine/spec/schema` and the test suite fails if they drift.
 
 ## Telemetry
 
@@ -161,9 +167,13 @@ guarded_tool = guard_langchain_tool(
 documents = await guarded_tool.ainvoke({"query": "public docs"})
 ```
 
+## Engine runtime errors
+
+Engine failures (an unreadable manifest, a missing policy-target path, a policy that could not be invoked) raise `AgentControlRuntimeError`, a `RuntimeError` whose `reason` is the reserved `runtime_error:*` code and whose `detail` is the engine's detail text, so a host branches on the code instead of parsing the message. `AgentControlRuntimeError`, `AgentControlBlocked`, and `AgentControlSuspended` all survive `pickle`, so they propagate unchanged out of `multiprocessing` and `concurrent.futures` process workers.
+
 ## Escalation and approval
 
-In enforce mode a `deny` verdict raises `AgentControlBlocked`. An `escalate` verdict consults an optional approval resolver, a host callback that decides whether the action proceeds. Supply a resolver on the instance with `AgentControl(..., approval_resolver=...)` (or `from_native(..., approval_resolver=...)`) or override it per call with the `approval_resolver=` argument on `run()`, `run_tool()`, and `protect_tool()`. The resolver returns `ApprovalResolution.allow(result.action_identity)`, `ApprovalResolution.deny()`, or `ApprovalResolution.suspend(handle=..., action_identity=result.action_identity)`.
+In enforce mode a `deny` verdict raises `AgentControlBlocked`. An `escalate` verdict consults an optional approval resolver, a host callback that decides whether the action proceeds. Supply a resolver on the instance with `AgentControl(..., approval_resolver=...)` (or `from_native(..., approval_resolver=...)`) or override it per call with the `approval_resolver=` argument on `run()`, `run_tool()`, and `protect_tool()`. The resolver returns `ApprovalResolution.allow(result.action_identity)`, `ApprovalResolution.deny(reason)` (the optional `reason` becomes the denial verdict's `message`), or `ApprovalResolution.suspend(handle=..., action_identity=result.action_identity)`.
 
 - allow proceeds with the original action target. `escalate` verdicts do not return or apply transformed targets
 - deny, an unrecognized result, or a resolver that raises blocks with `AgentControlBlocked`
