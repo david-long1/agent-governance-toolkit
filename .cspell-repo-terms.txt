@@ -67,11 +67,16 @@ AWSIAM
 Acta
 Actix
 AgentGovernance
+Agentflow
+Agentflows
 AgentMesh
+Agentmetry
 AgentOS
 AgentRateLimiter
 Amol
 Anambra
+Artzain
+Assn
 Authenticode
 BFBFBF
 BLOCKME
@@ -149,6 +154,13 @@ GRPC
 Gazetted
 Ghanaian
 GitHub
+thatjosh
+execdir
+ionice
+setsid
+xargs
+strace
+busybox
 Governorate
 HEALTHCHECK
 HKDF
@@ -160,6 +172,7 @@ Hyperlight
 IATP
 IGNORECASE
 IPFS
+ISSN
 Initialise
 Jaccard
 Janssen
@@ -236,6 +249,7 @@ Printf
 Println
 Pseudonymisation
 Pydantic
+Quantumskipper
 REALPKG
 RISA
 RUBYOPT
@@ -318,6 +332,7 @@ aexit
 agentchat
 agentframework
 agentidentity
+agentmeshentryhash
 agentrust
 agentshield
 agentveil
@@ -381,6 +396,7 @@ basenames
 behaviour
 behavioural
 bindgen
+blitzcrieg
 bluebubbles
 bmod
 bubblewrap
@@ -887,6 +903,7 @@ pytest
 pytestmark
 pythonhosted
 pythonstartup
+readyz
 pyupgrade
 pyyaml
 qualname
@@ -964,6 +981,7 @@ sarif
 sboms
 sbyte
 scak
+scandir
 schemaversion
 scikit
 scipy
@@ -1006,6 +1024,7 @@ slugification
 smol
 snupkg
 socat
+socsec
 softmax
 spacy
 spanid
@@ -1014,6 +1033,7 @@ spellcheck
 spellchecking
 spiffesvid
 splitlines
+keepends
 sprintf
 stacklevel
 startswith
@@ -1065,6 +1085,7 @@ tzdata
 ufeff
 unaliased
 uncallable
+uncompilable
 unconfigured
 unicodedata
 uninspectable
@@ -1233,3 +1254,22 @@ acall
 Acall
 acheck
 unroutable
+
+# --- Terraform examples ---
+myagent
+myagentprodsa
+passwordless
+appconfig
+appconfiguration
+azconfig
+boto
+hostnames
+tfvars
+amd64
+alltrue
+cidrhost
+CIDRs
+propagation
+readonly
+resolver
+sha256sum
